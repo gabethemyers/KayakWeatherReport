@@ -40,7 +40,7 @@ function App() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    fetch("http://100.94.171.1:8080/api/weather")
+    fetch("/api/v1/conditions")
       .then(response => response.json())
       .then(data => {
         setWeather(data);
@@ -115,14 +115,14 @@ function App() {
         <div className="flex flex-col justify-center items-stretch my-2 rounded-2xl bg-white overflow-hidden">
           <p className="text-sm text-uppercase text-center text-grey-500 bg-sky-500">Tide</p>
           <div className="flex justify-center items-center bg-white px-8 pb-2">
-            <p className="text-2xl p-2">{weather.tide} ft</p>
+            <p className="text-2xl p-2">{weather.tide.next_height} ft</p>
           </div>
         </div>
 
         <div className="flex flex-col justify-center items-stretch my-2 rounded-2xl bg-white overflow-hidden">
           <p className="text-sm text-uppercase text-center text-grey-500 bg-sky-500">Swell</p>
           <div className="flex justify-center items-center bg-white px-8 pb-2">
-            <p className="text-2xl p-2">{weather.swell} ft</p>
+            <p className="text-2xl p-2">{weather.swell.wave_height} ft</p>
           </div>
         </div>
       </div>
