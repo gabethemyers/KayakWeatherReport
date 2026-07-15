@@ -40,7 +40,8 @@ type WeatherResponse struct {
 	Swell struct {
 		WaveHeight float64 `json:"wave_height"`
 		WavePeriod float64 `json:"wave_period"`
-		Direction  int     `json:"direction"`
+		// TODO: change to cardinal direction and add arrow
+		Direction int `json:"direction"`
 	} `json:"swell"`
 }
 
@@ -400,7 +401,7 @@ func fetchCurrent() (TideAndCurrentData, error) {
 
 	if result.CurrentSpeed == "Not Moving" {
 		result.CurrentState = "Slack"
-		result.CurrentArrow = "●"
+		result.CurrentArrow = ""
 	} else if nextTide.Type == "H" {
 		result.CurrentState = "Flooding"
 		result.CurrentArrow = "→" // Moving East, pushing deeper into the slough
@@ -445,6 +446,36 @@ func main() {
 	r.Use(middleware.Logger)
 
 	r.Get("/api/v1/conditions", conditionsHandler)
+
+	r.Get("/api/v1/conditions/mock", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{
+		"wind": {
+			"gust": 10,
+			"speed": 10,
+			"direction": "W",
+			"arrow": "→",
+			"is_live": true
+		},
+		"current": {
+			"speed": "Not Moving",
+			"state": "Slack",
+			"arrow": ""
+		},
+		"tide": {
+			"next_type": "L",
+			"next_time": "2026-07-15 06:12",
+			"next_height": -1.433
+		},
+		"swell": {
+			"wave_height": 3.412,
+			"wave_period": 8.2,
+			"direction": 274
+		}
+	}`))
+	})
 
 	http.ListenAndServe(":8080", r)
 }
