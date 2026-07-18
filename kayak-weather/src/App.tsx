@@ -6,7 +6,7 @@ import { formatRelative, parse } from "date-fns";
 export interface TidePeak {
   time: string;
   height: number;
-  type: 'H' | 'L'; // Using a union type here ensures you only expect "H" or "L"
+  type: 'High' | 'Low'; // Using a union type here ensures you only expect "H" or "L"
 }
 
 export interface WeatherData {
@@ -23,7 +23,7 @@ export interface WeatherData {
     arrow: string; 
   };
   tide: {
-    next_type: 'H' | 'L';
+    next_type: 'High' | 'Low';
     next_time: string;
     next_height: number;
   };
@@ -68,7 +68,8 @@ function App() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    fetch("/api/v1/conditions")
+    const apiURL = import.meta.env.VITE_API_URL || "";
+    fetch(`${apiURL}/api/v1/conditions`)
       .then(response => response.json())
       .then(data => {
         setWeather(data);
@@ -90,7 +91,8 @@ function App() {
 
 
   return (
-    <div className="flex flex-col max-w-sm mx-auto min-h-screen bg-gradient-to-br from-sky-200 to-blue-400 rounded-xl gap-3">
+    <div className="min-h-screen w-full bg-gradient-to-br from-sky-200 to-blue-400 p-4">
+    <div className="max-w-sm mx-auto min-h-full bg-white/40 backdrop-blur-md rounded-3xl shadow-xl gap-3 pb-2 flex flex-col">
       {/* HEADER BAR */}
       <div className="flex justify-between items-center pt-2 px-2">
         <p className="text-md font-bold text-slate-800">📍Moss Landing</p>
@@ -177,12 +179,13 @@ function App() {
             <p className="text-lg">{formatTideTime(weather.tide.next_time).time}</p>
           </div>
           {/* Center Column: Next Tide Type (H or L) */}
-          <p className="text-3xl text-bold text-center">{weather.tide.next_type}</p>
+          <p className="text-2xl text-bold text-center">{weather.tide.next_type}</p>
           {/* Right Column: Next Tide Height */}
           <p className="text-2xl p-2 whitespace-nowrap">{weather.tide.next_height.toFixed(2)} <span className="text-base text-gray-500 font-normal">ft</span></p>
         </div>
       </div>
 
+    </div>
     </div>
 
   );
