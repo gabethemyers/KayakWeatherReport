@@ -23,6 +23,7 @@ Thumbs.db
 *.dylib
 *.test
 *.out
+bin/
 
 # Env
 .env

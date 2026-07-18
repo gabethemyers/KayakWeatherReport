@@ -40,8 +40,8 @@ type WeatherResponse struct {
 	Swell struct {
 		WaveHeight float64 `json:"wave_height"`
 		WavePeriod float64 `json:"wave_period"`
-		// TODO: change to cardinal direction and add arrow
-		Direction int `json:"direction"`
+		Direction  string  `json:"direction"`
+		Arrow      string  `json:"arrow"`
 	} `json:"swell"`
 }
 
@@ -166,21 +166,51 @@ func conditionsHandler(w http.ResponseWriter, r *http.Request) {
 
 	data.Swell.WaveHeight = swellData.WaveHeight
 	data.Swell.WavePeriod = swellData.WavePeriod
-	data.Swell.Direction = swellData.Direction
+	data.Swell.Direction = getCardinalFromDegree(swellData.Direction)
+	_, data.Swell.Arrow = getCompassFromCardinal(data.Swell.Direction, true)
 
 	if err := json.NewEncoder(w).Encode(data); err != nil {
 		log.Printf("Failed to encode payload: %v", err)
 	}
 }
 
-func getCompassFromCardinal(cardinal string) (string, string) {
-	mapping := map[string]string{
-		"N": "↓", "NE": "↙", "E": "←", "SE": "↖",
-		"S": "↑", "SW": "↗", "W": "→", "NW": "↖",
-		"NNE": "↙", "ENE": "←", "ESE": "↖", "SSE": "↖",
-		"SSW": "↗", "WSW": "→", "WNW": "↗", "NNW": "↘",
+// Arrow direction definitions based on the vector's destination (where it is going)
+var destinationArrows = map[string]string{
+	"N": "↓", "NE": "↙", "E": "←", "SE": "↖",
+	"S": "↑", "SW": "↗", "W": "→", "NW": "↘",
+	"NNE": "↙", "ENE": "←", "ESE": "↖", "SSE": "↖",
+	"SSW": "↗", "WSW": "→", "WNW": "↘", "NNW": "↓",
+}
+
+// Opposites map to flip the vector 180 degrees
+var opposites = map[string]string{
+	"N": "S", "NE": "SW", "E": "W", "SE": "NW",
+	"S": "N", "SW": "NE", "W": "E", "NW": "SE",
+	"NNE": "SSW", "ENE": "WSW", "ESE": "WNW", "SSE": "NNW",
+	"SSW": "NNE", "WSW": "ENE", "WNW": "ESE", "NNW": "SSE",
+}
+
+// getCompassFromCardinal returns the cardinal string and the correct arrow.
+// Set 'towards' to true for Swell (where it is going).
+// Set 'towards' to false for Wind (arrow representing where it originates/blows from).
+func getCompassFromCardinal(cardinal string, towards bool) (string, string) {
+	if towards {
+		return cardinal, destinationArrows[cardinal]
 	}
-	return cardinal, mapping[cardinal]
+
+	// If we want the source direction (wind origin), we flip the destination arrow
+	oppositeCardinal := opposites[cardinal]
+	return cardinal, destinationArrows[oppositeCardinal]
+}
+
+func getCardinalFromDegree(degree int) string {
+	mapping := map[int]string{
+		0: "N", 1: "NE", 2: "E", 3: "SE", 4: "S",
+		5: "SW", 6: "W", 7: "NW",
+	}
+
+	index := ((degree + 22) / 45) % 8
+	return mapping[index]
 }
 
 func fetchWind() (WindData, error) {
@@ -235,7 +265,7 @@ func fetchWind() (WindData, error) {
 	}
 
 	// Unpack directional vectors
-	_, arrowStr := getCompassFromCardinal(currentPeriod.WindDirection)
+	_, arrowStr := getCompassFromCardinal(currentPeriod.WindDirection, true)
 
 	// Consolidate properties directly into the return container structure
 	wind.Speed = speedMph
@@ -356,7 +386,7 @@ func fetchCurrent() (TideAndCurrentData, error) {
 	var previousTideTime time.Time
 
 	for i, tide := range timeline {
-		tideTime, err := time.Parse("2006-01-02 15:04", tide.Time)
+		tideTime, err := time.ParseInLocation("2006-01-02 15:04", tide.Time, time.Local)
 		if err != nil {
 			continue
 		}
@@ -387,6 +417,12 @@ func fetchCurrent() (TideAndCurrentData, error) {
 	result.NextHeight = nextTide.Height
 	result.NextTime = nextTide.Time
 	result.NextType = nextTide.Type
+
+	if nextTide.Type == "H" {
+		result.NextType = "High"
+	} else {
+		result.NextType = "Low"
+	}
 
 	// Then calculate current data
 
@@ -472,10 +508,15 @@ func main() {
 		"swell": {
 			"wave_height": 3.412,
 			"wave_period": 8.2,
-			"direction": 274
+			"direction": "W",
+			"arrow": "→"
 		}
 	}`))
 	})
 
-	http.ListenAndServe(":8080", r)
+	// 1. Log that the server is trying to start
+	log.Println("Starting kayak weather API server on :8080...")
+
+	// 2. Wrap ListenAndServe in log.Fatal so failure prints to your console
+	log.Fatal(http.ListenAndServe(":8080", r))
 }
