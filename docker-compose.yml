@@ -1,0 +1,17 @@
+version: '3.8'
+services:
+  api:
+    build:
+      context: ./kayak-weather-api/
+    restart: always
+
+  frontend:
+    build:
+      context: ./kayak-weather/
+      args:
+        - VITE_API_URL=${VITE_API_URL}
+    ports:
+      - "80:80"
+    depends_on:
+      - api
+    restart: always

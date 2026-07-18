@@ -28,3 +28,6 @@ bin/
 # Env
 .env
 .env.local
+
+# docs
+old_docs/
