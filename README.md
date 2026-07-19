@@ -21,6 +21,17 @@ Aggregates data from four public APIs into a single view:
 
 The app infers current direction (flooding/ebbing) and speed from the tide curve. No separate current sensor needed.
 
+## Project Structure
+
+```
+kayak-weather/          React + Vite frontend (Dockerfile, nginx.conf)
+kayak-weather-api/      Go API server (Dockerfile)
+Caddyfile               HTTPS config (production only)
+docker-compose.yml      Production services
+docker-compose.override.yml   Local dev overrides
+```
+[API docs](kayak-weather-api/README.md)
+
 ## Key Decisions
 
 **Mixed live + forecast wind.** Forecast wind comes from the NWS hourly gridpoint API. When the nearest NDBC buoy has recent data, it overrides the forecast with a live reading. The UI shows a "live" indicator so the user knows which source they're seeing.
