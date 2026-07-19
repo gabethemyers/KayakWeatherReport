@@ -1,4 +1,8 @@
 services:
+  api:
+    environment:
+      - TZ=America/Los_Angeles
+
   frontend:
     build:
       args:

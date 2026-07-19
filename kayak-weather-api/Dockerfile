@@ -14,6 +14,8 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o kayak-api ./
 #Runner
 FROM alpine:latest
 
+RUN apk add --no-cache tzdata
+
 WORKDIR /app
 
 COPY --from=builder /app/kayak-api .

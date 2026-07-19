@@ -1,8 +1,23 @@
-version: '3.8'
 services:
+  caddy:
+    profiles: ["production"]
+    image: caddy:2-alpine
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+
   api:
     build:
       context: ./kayak-weather-api/
+    environment:
+      - TZ=America/Los_Angeles
     restart: always
 
   frontend:
@@ -10,8 +25,10 @@ services:
       context: ./kayak-weather/
       args:
         - VITE_API_URL=${VITE_API_URL}
-    ports:
-      - "80:80"
     depends_on:
       - api
     restart: always
+
+volumes:
+  caddy_data:
+  caddy_config:
