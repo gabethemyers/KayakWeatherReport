@@ -24,6 +24,7 @@ services:
     build:
       context: ./kayak-weather/
       args:
+        # TODO: VITE_API_URL is unused in Docker — relative paths work via nginx proxy. Clean up.
         - VITE_API_URL=${VITE_API_URL}
     depends_on:
       - api

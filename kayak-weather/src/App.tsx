@@ -68,6 +68,7 @@ function App() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    // TODO: VITE_API_URL is unused in Docker — relative paths work via nginx proxy. Clean up.
     const apiURL = import.meta.env.VITE_API_URL || "";
     fetch(`${apiURL}/api/v1/conditions`)
       .then(response => response.json())
