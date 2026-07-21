@@ -61,27 +61,47 @@ function formatTideTime(dateTimeStr: string): FormattedTide {
   };
 }
 
+
 function App() {
   const today = new Date()
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const [canRefresh, setCanRefresh] = useState(false)
 
-  useEffect(() => {
-    // TODO: VITE_API_URL is unused in Docker — relative paths work via nginx proxy. Clean up.
-    const apiURL = import.meta.env.VITE_API_URL || "";
-    fetch(`${apiURL}/api/v1/conditions`)
+  function fetchWeatherData() {
+    setLoading(true);
+    setError(null);
+
+    fetch("/api/v1/conditions")
       .then(response => response.json())
       .then(data => {
         setWeather(data);
         setLoading(false);
+        setLastUpdate(new Date())
       })
       .catch(err => {
         setError(err.message);
         setLoading(false);
       });
+  } 
+
+
+
+  useEffect(() => {
+    fetchWeatherData()
   }, []);
 
+  useEffect(() => {
+    if (!lastUpdate) return;
+    setCanRefresh(false);
+    const msRemaining = 60000 - (Date.now() - lastUpdate.getTime());
+    const id = setTimeout(() => setCanRefresh(true), Math.max(msRemaining, 0));
+    return () => clearTimeout(id);
+  }, [lastUpdate]);
+
+  //TODO: improve loading screen
   if (loading) {
     return <div className="text-center p-10">Loading weather...</div>;
   }
@@ -107,6 +127,15 @@ function App() {
           <span className="text-sky-900">Weather Report</span>
         </h1>
       </div>
+
+      {canRefresh && (
+        <button 
+          onClick={fetchWeatherData} 
+          className="px-3 py-1 mx-auto text-xs font-bold uppercase tracking-wider bg-white/80 border border-sky-200 text-sky-900 rounded-full shadow-sm hover:bg-white active:scale-95 transition-all"
+        >
+          Refresh
+        </button>
+      )}
 
       {/* HERO */}
       <div className="flex flex-col justify-center items-stretch mx-6 my-2 pb-2 rounded-2xl bg-white overflow-hidden shadow-md">
