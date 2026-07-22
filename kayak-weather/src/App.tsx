@@ -62,6 +62,8 @@ function formatTideTime(dateTimeStr: string): FormattedTide {
 }
 
 
+const REFRESH_COOLDOWN_MS = 60_000;
+
 function App() {
   const today = new Date()
   const [weather, setWeather] = useState<WeatherData | null>(null);
@@ -96,7 +98,7 @@ function App() {
   useEffect(() => {
     if (!lastUpdate) return;
     setCanRefresh(false);
-    const msRemaining = 60000 - (Date.now() - lastUpdate.getTime());
+    const msRemaining = REFRESH_COOLDOWN_MS - (Date.now() - lastUpdate.getTime());
     const id = setTimeout(() => setCanRefresh(true), Math.max(msRemaining, 0));
     return () => clearTimeout(id);
   }, [lastUpdate]);
