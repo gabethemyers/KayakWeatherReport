@@ -4,8 +4,5 @@ services:
       - TZ=America/Los_Angeles
 
   frontend:
-    build:
-      args:
-        - VITE_API_URL=
     ports:
       - "8080:80"
