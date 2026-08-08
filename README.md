@@ -55,14 +55,33 @@ docker compose up --build
 # App at http://localhost:8080
 ```
 
-### Production deploy
+### Production Deploy
+
+#### Automated Deployment (Recommended)
+
+Run `deploy.sh` from the project root on your VPS to handle pulling code, rebuilding containers, and cleaning up old build artifacts in one step:
+
+```bash
+chmod +x deploy.sh  # First time setup only
+./deploy.sh
+```
+
+**What `deploy.sh` does:**
+1. Navigates to `~/KayakWeatherReport` and pulls the latest main branch (`git pull`).
+2. Stops the active production stack (`docker compose --profile production down`).
+3. Rebuilds images and launches containers in detached mode (`docker compose --profile production up -d --build`).
+4. Prunes leftover build images to save disk space (`docker image prune -f`).
+5. Prints container status (`docker compose --profile production ps`).
+
+#### Manual Deployment
+
+Alternatively, you can run the Docker Compose commands directly:
 
 ```bash
 docker compose --profile production up -d --build
-# App at https://kayakweather.duckdns.org
+# App at [https://kayakweather.duckdns.org](https://kayakweather.duckdns.org)
 ```
-
-### Architecture
+## Architecture
 
 ```
 Browser ──HTTPS──> Caddy ──HTTP──> Nginx ──/api/──> Go API
