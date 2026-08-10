@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -118,26 +119,76 @@ type OpenMeteoResponse struct {
 // handle errors
 
 func conditionsHandler(w http.ResponseWriter, r *http.Request) {
-	forcastData, err := fetchWind()
-	if err != nil {
+	var wg sync.WaitGroup
+
+	// wind var
+	var forecastData WindData
+	var forecastErr error
+
+	// live wind var
+	var liveWindSpeed int
+	var liveWindErr error
+
+	// Tide and Current Var
+	var tideAndCurrentData TideAndCurrentData
+	var tideAndCurrentErr error
+
+	// Swell Var
+	var swellData SwellData
+	var swellErr error
+
+	wg.Add(4)
+
+	go func() {
+		defer wg.Done()
+		forecastData, forecastErr = fetchWind()
+	}()
+
+	go func() {
+		defer wg.Done()
+		liveWindSpeed, liveWindErr = fetchLiveWindSpeed()
+	}()
+
+	go func() {
+		defer wg.Done()
+		tideAndCurrentData, tideAndCurrentErr = fetchCurrent()
+	}()
+
+	go func() {
+		defer wg.Done()
+		swellData, swellErr = fetchSwell()
+	}()
+
+	wg.Wait()
+
+	if forecastErr != nil {
 		http.Error(w, "Fetching Wind failed", http.StatusInternalServerError)
 		return
 	}
 
-	liveWindSpeed, liveErr := fetchLiveWindSpeed()
+	if tideAndCurrentErr != nil {
+		http.Error(w, fmt.Sprintf("Fetching Tide and Current failed: %v", tideAndCurrentErr), http.StatusInternalServerError)
+		return
+	}
+
+	if swellErr != nil {
+		http.Error(w, fmt.Sprintf("Fetching Swell failed: %v", swellErr), http.StatusInternalServerError)
+		return
+	}
 
 	w.Header().Set("Content-type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 
 	data := WeatherResponse{}
 
-	data.Wind.Gust = forcastData.Gust
+	// Wind Data assignment
+	data.Wind.Gust = forecastData.Gust
 	data.Wind.IsLive = false
-	data.Wind.Speed = forcastData.Speed
-	data.Wind.Direction = forcastData.Direction
-	data.Wind.Arrow = forcastData.Arrow
+	data.Wind.Speed = forecastData.Speed
+	data.Wind.Direction = forecastData.Direction
+	data.Wind.Arrow = forecastData.Arrow
 
-	if liveErr == nil {
+	if liveWindErr == nil {
 		data.Wind.Speed = liveWindSpeed
 		data.Wind.IsLive = true
 		if liveWindSpeed > data.Wind.Gust {
@@ -145,12 +196,7 @@ func conditionsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	tideAndCurrentData, err := fetchCurrent()
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Fetching Tide and Current failed: %v", err), http.StatusInternalServerError)
-		return
-	}
-
+	// Current and Tide Data assignment
 	data.Current.Speed = tideAndCurrentData.CurrentSpeed
 	data.Current.Arrow = tideAndCurrentData.CurrentArrow
 	data.Current.State = tideAndCurrentData.CurrentState
@@ -159,11 +205,7 @@ func conditionsHandler(w http.ResponseWriter, r *http.Request) {
 	data.Tide.NextTime = tideAndCurrentData.NextTime
 	data.Tide.NextType = tideAndCurrentData.NextType
 
-	swellData, err := fetchSwell()
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Fetching Swell failed: %v", err), http.StatusInternalServerError)
-	}
-
+	// Swell Data assignment
 	data.Swell.WaveHeight = swellData.WaveHeight
 	data.Swell.WavePeriod = swellData.WavePeriod
 	data.Swell.Direction = getCardinalFromDegree(swellData.Direction)
