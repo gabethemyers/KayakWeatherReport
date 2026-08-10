@@ -2,14 +2,17 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"math"
 	"net/http"
+	"runtime/debug"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -118,26 +121,103 @@ type OpenMeteoResponse struct {
 // handle errors
 
 func conditionsHandler(w http.ResponseWriter, r *http.Request) {
-	forcastData, err := fetchWind()
-	if err != nil {
-		http.Error(w, "Fetching Wind failed", http.StatusInternalServerError)
+	var wg sync.WaitGroup
+
+	// wind var
+	var forecastData WindData
+	var forecastErr error
+
+	// live wind var
+	var liveWindSpeed int
+	var liveWindErr error
+
+	// Tide and Current Var
+	var tideAndCurrentData TideAndCurrentData
+	var tideAndCurrentErr error
+
+	// Swell Var
+	var swellData SwellData
+	var swellErr error
+
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	wg.Add(4)
+
+	go func() {
+		defer wg.Done()
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				log.Printf("panic in fetchWind:%v\n%s", recovered, debug.Stack())
+				forecastErr = fmt.Errorf("internal error fetching wind data")
+			}
+		}()
+		forecastData, forecastErr = fetchWind(ctx)
+	}()
+
+	go func() {
+		defer wg.Done()
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				log.Printf("panic in fetchLiveWindSpeed:%v\n%s", recovered, debug.Stack())
+				liveWindErr = fmt.Errorf("internal error fetching live wind speed data")
+			}
+		}()
+		liveWindSpeed, liveWindErr = fetchLiveWindSpeed(ctx)
+	}()
+
+	go func() {
+		defer wg.Done()
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				log.Printf("panic in fetchCurrent: %v\n%s", recovered, debug.Stack())
+				tideAndCurrentErr = fmt.Errorf("internal error fetching tide and current data")
+			}
+		}()
+		tideAndCurrentData, tideAndCurrentErr = fetchCurrent(ctx)
+	}()
+
+	go func() {
+		defer wg.Done()
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				log.Printf("panic in fetchSwell: %v\n%s", recovered, debug.Stack())
+				swellErr = fmt.Errorf("internal error fetching swell data")
+			}
+		}()
+		swellData, swellErr = fetchSwell(ctx)
+	}()
+
+	wg.Wait()
+
+	if forecastErr != nil {
+		http.Error(w, fmt.Sprintf("Fetching Wind failed: %v", forecastErr), http.StatusInternalServerError)
 		return
 	}
 
-	liveWindSpeed, liveErr := fetchLiveWindSpeed()
+	if tideAndCurrentErr != nil {
+		http.Error(w, fmt.Sprintf("Fetching Tide and Current failed: %v", tideAndCurrentErr), http.StatusInternalServerError)
+		return
+	}
+
+	if swellErr != nil {
+		http.Error(w, fmt.Sprintf("Fetching Swell failed: %v", swellErr), http.StatusInternalServerError)
+		return
+	}
 
 	w.Header().Set("Content-type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 
 	data := WeatherResponse{}
 
-	data.Wind.Gust = forcastData.Gust
+	// Wind Data assignment
+	data.Wind.Gust = forecastData.Gust
 	data.Wind.IsLive = false
-	data.Wind.Speed = forcastData.Speed
-	data.Wind.Direction = forcastData.Direction
-	data.Wind.Arrow = forcastData.Arrow
+	data.Wind.Speed = forecastData.Speed
+	data.Wind.Direction = forecastData.Direction
+	data.Wind.Arrow = forecastData.Arrow
 
-	if liveErr == nil {
+	if liveWindErr == nil {
 		data.Wind.Speed = liveWindSpeed
 		data.Wind.IsLive = true
 		if liveWindSpeed > data.Wind.Gust {
@@ -145,12 +225,7 @@ func conditionsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	tideAndCurrentData, err := fetchCurrent()
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Fetching Tide and Current failed: %v", err), http.StatusInternalServerError)
-		return
-	}
-
+	// Current and Tide Data assignment
 	data.Current.Speed = tideAndCurrentData.CurrentSpeed
 	data.Current.Arrow = tideAndCurrentData.CurrentArrow
 	data.Current.State = tideAndCurrentData.CurrentState
@@ -159,11 +234,7 @@ func conditionsHandler(w http.ResponseWriter, r *http.Request) {
 	data.Tide.NextTime = tideAndCurrentData.NextTime
 	data.Tide.NextType = tideAndCurrentData.NextType
 
-	swellData, err := fetchSwell()
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Fetching Swell failed: %v", err), http.StatusInternalServerError)
-	}
-
+	// Swell Data assignment
 	data.Swell.WaveHeight = swellData.WaveHeight
 	data.Swell.WavePeriod = swellData.WavePeriod
 	data.Swell.Direction = getCardinalFromDegree(swellData.Direction)
@@ -213,19 +284,17 @@ func getCardinalFromDegree(degree int) string {
 	return mapping[index]
 }
 
-func fetchWind() (WindData, error) {
+func fetchWind(ctx context.Context) (WindData, error) {
 	var wind WindData
 	url := "https://api.weather.gov/gridpoints/MTR/98,58/forecast/hourly"
 
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return wind, fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set("User-Agent", "MyKayakWeatherApp/1.0")
 
-	client := &http.Client{
-		Timeout: 6 * time.Second,
-	}
+	client := &http.Client{}
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -277,18 +346,16 @@ func fetchWind() (WindData, error) {
 }
 
 // returns live wind speed in mph if it exits, otherwise error
-func fetchLiveWindSpeed() (int, error) {
+func fetchLiveWindSpeed(ctx context.Context) (int, error) {
 	liveWindSpeed := -1
 	url := "https://www.ndbc.noaa.gov/data/realtime2/MLSC1.txt"
 
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return liveWindSpeed, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	client := &http.Client{
-		Timeout: 8 * time.Second,
-	}
+	client := &http.Client{}
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -340,14 +407,21 @@ func fetchLiveWindSpeed() (int, error) {
 // current speed is also going to have to be a status instead of a number
 
 // TODO: Also figure out if this current architeture is right, where i have wind data current data and then combine into the final response.
-func fetchCurrent() (TideAndCurrentData, error) {
+func fetchCurrent(ctx context.Context) (TideAndCurrentData, error) {
 	var data NoaaTideResponse
 	// TODO: fetch data using range and a begin date in this format: begin_date=20120415&range=48 	Retrieves data for 48 hours beginning on April 15, 2012
 	today := time.Now()
 	yesterday := today.AddDate(0, 0, -1)
 	url := fmt.Sprintf("https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?station=9413623&product=predictions&datum=MLLW&interval=hilo&time_zone=lst_ldt&units=english&format=json&begin_date=%s&range=72", yesterday.Format("20060102"))
 
-	resp, err := http.Get(url)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return TideAndCurrentData{}, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	client := &http.Client{}
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return TideAndCurrentData{}, fmt.Errorf("network error: %w", err)
 	}
@@ -449,11 +523,18 @@ func fetchCurrent() (TideAndCurrentData, error) {
 	return result, nil
 }
 
-func fetchSwell() (SwellData, error) {
+func fetchSwell(ctx context.Context) (SwellData, error) {
 	data := OpenMeteoResponse{}
 	url := "https://marine-api.open-meteo.com/v1/marine?latitude=36.80&longitude=-121.79&current=wave_height,wave_period,wave_direction&timezone=auto&length_unit=imperial"
 
-	resp, err := http.Get(url)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return SwellData{}, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	client := &http.Client{}
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return SwellData{}, fmt.Errorf("network error: %w", err)
 	}
