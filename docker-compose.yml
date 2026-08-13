@@ -1,32 +1,24 @@
 services:
-  caddy:
-    profiles: ["production"]
-    image: caddy:2-alpine
-    restart: always
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    depends_on:
-      - frontend
-
   api:
     build:
       context: ./kayak-weather-api/
+    container_name: kayak-api
     environment:
       - TZ=America/Los_Angeles
     restart: always
+    networks:
+      - web_gateway
 
   frontend:
     build:
       context: ./kayak-weather/
+    container_name: kayak-frontend
     depends_on:
       - api
     restart: always
+    networks:
+      - web_gateway
 
-volumes:
-  caddy_data:
-  caddy_config:
+networks:
+  web_gateway:
+    external: true
