@@ -26,7 +26,6 @@ The app infers current direction (flooding/ebbing) and speed from the tide curve
 ```
 kayak-weather/          React + Vite frontend (Dockerfile, nginx.conf)
 kayak-weather-api/      Go API server (Dockerfile)
-Caddyfile               HTTPS config (production only)
 docker-compose.yml      Production services
 docker-compose.override.yml   Local dev overrides
 ```
