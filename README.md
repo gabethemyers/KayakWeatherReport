@@ -2,7 +2,14 @@
 
 Aggregates live wind, tide, current, and swell data into a single at-a-glance view for kayak guides on the Elkhorn Slough in Moss Landing, CA.
 
-**[kayakweather.duckdns.org](https://kayakweather.duckdns.org)**
+<p align="center">
+  🔗 <strong><a href="https://kayakweather.duckdns.org">kayakweather.duckdns.org</a></strong>
+</p>
+
+<p align="center">
+  <img src="https://i.imgur.com/BX8XHkI.png" alt="Kayak Weather Report Screenshot" width="400">
+</p>
+
 
 ## The Problem
 
