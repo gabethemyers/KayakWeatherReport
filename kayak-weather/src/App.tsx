@@ -105,7 +105,7 @@ function App() {
 
   //TODO: improve loading screen
   if (loading) {
-    return <div className="text-center p-10">Loading weather...</div>;
+    return <div className="min-h-screen w-full bg-gradient-to-br from-sky-200 to-blue-400 p-4"></div>
   }
 
   if (error) {
